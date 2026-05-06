@@ -1,0 +1,40 @@
+name: Update from Upstream
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Run update script
+        run: node scripts/update-from-release.mjs
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Commit and push
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git config user.name "YAOS Updater"
+          git config user.email "updater@yaos"
+          git add -A
+          git commit -m "yaos(server): update to ${VERSION}"
+          git push
