@@ -10,6 +10,10 @@ Cloudflare Worker server for the YAOS Obsidian plugin. It relays Yjs CRDT update
 
 ## Architecture
 
+<p align="center">
+  <img src="assets/architecture-diagram.png" alt="YAOS architecture diagram" width="700" />
+</p>
+
 - One vault maps to one Durable Object-backed sync room.
 - Yjs sync runs through `y-partyserver`.
 - Durable Object storage persists the live CRDT snapshot.
