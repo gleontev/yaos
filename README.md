@@ -1,6 +1,10 @@
 # YAOS server
 
 <p align="center">
+  <img src="assets/hero-banner.png" alt="YAOS — Obsidian vault sync over Cloudflare" width="100%" />
+</p>
+
+<p align="center">
   <img src="assets/logo.png" alt="YAOS logo" width="128" />
 </p>
 
