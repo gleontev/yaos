@@ -2,18 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
-    branches: [main]
+    branches: ["**"]
 
 jobs:
-  typecheck:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
+
       - run: npm ci
-      - run: npm run typecheck
+      - run: npm ci --prefix server
+      - run: npm run build
+      - run: npm run test:ci
+      - run: npm --prefix server run typecheck

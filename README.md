@@ -1,156 +1,180 @@
-# YAOS server
+# YAOS
 
 <p align="center">
   <img src="assets/hero-banner.png" alt="YAOS — Obsidian vault sync over Cloudflare" width="100%" />
 </p>
 
 <p align="center">
-  <img src="assets/logo.png" alt="YAOS logo" width="128" />
+  <img src="assets/logo.png" alt="YAOS Logo" width="128" />
 </p>
 
-Cloudflare Worker server for the YAOS Obsidian plugin. It relays Yjs CRDT updates through a Durable Object and stores attachments plus snapshots in R2.
+
+**A zero-terminal, real-time sync engine for Obsidian, powered by your own Cloudflare Worker.**
+
+Your notes stay in sync instantly across devices, without conflicted copies, delayed file sync, or database-heavy self-hosting.
+
+<img src="https://github.com/user-attachments/assets/ee937050-8a05-4d56-9c5f-3ae5003496fc" alt="YAOS syncing a note across desktop and mobile in real time" width="720" />
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/kavinsood/yaos/tree/main/server)
 
+[![License: 0-BSD](https://img.shields.io/badge/license-0--BSD-green)](LICENSE)
+
+No terminal, no `.env` files, no database setup required.
+
+## How it compares
+
+Most ways to sync Obsidian pick a trade-off. YAOS picks none.
+
+| | Conflicts | Real-time | Self-hosted | No terminal | Free |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **iCloud / Dropbox** | Conflicted copies | No | No | Yes | Yes |
+| **Obsidian Sync** | Rare | Delayed | No | Yes | $96/yr |
+| **Git / LiveSync** | Manual | Varies | Yes | No | Yes |
+| **Relay / Screengarden** | No | Yes | No | Yes | Freemium |
+| **YAOS** | **None** | **Yes** | **Yes** | **Yes** | **$0** |
+
+YAOS uses [Yjs CRDTs](https://yjs.dev) to keep one live vault state moving across devices instead of asking them to take polite turns uploading files and hoping nothing collides.
+
+If you want the official, fully managed experience, pay for Obsidian Sync and support the team. If you want a fast, self-hosted, local-first alternative that you fully control, this is YAOS.
+
+## Get started
+
+YAOS has two parts: an Obsidian plugin and a small Cloudflare server you deploy to your own account. The Worker setup page walks you through the remaining steps, so you don't need to memorize this.
+
+<a href="https://youtu.be/xeS126_XK9Q">
+  <img src="https://img.youtube.com/vi/xeS126_XK9Q/maxresdefault.jpg" width="480" alt="Watch the setup walkthrough" />
+</a>
+
+**1. Deploy your server**
+Click **Deploy to Cloudflare** above. Cloudflare creates a Worker in your account.
+
+**2. Claim your server**
+Open the Worker URL. Click **Claim** to lock the server to you and generate your setup token.
+
+**3. Install the plugin**
+YAOS is in the Obsidian Marketplace review queue. To install today, add it through [BRAT](https://github.com/TfTHacker/obsidian42-brat): open BRAT settings → **Add Beta plugin** → paste `kavinsood/yaos`.
+
+**4. Connect your vault**
+From the claim page, open the setup link or scan the QR code. YAOS fills in the connection details automatically.
+
+That's it. Your vault is syncing.
+
+## Attachments and snapshots
+
+Text sync works out of the box. To sync images, PDFs, and other attachments, add a Cloudflare R2 bucket — it takes about a minute.
+
+<a href="https://youtu.be/Z7xCMEYfdFM">
+  <img src="https://img.youtube.com/vi/Z7xCMEYfdFM/maxresdefault.jpg" width="480" alt="Watch the R2 setup video" />
+</a>
+
+R2 also enables daily automatic snapshots and on-demand point-in-time backups. You can browse snapshots, diff against current state, and selectively restore individual files. If you skip R2, text sync still works perfectly — you just won't have attachment sync or snapshots.
+
+## Updating your server
+
+YAOS is designed to be zero-terminal, but because you own your infrastructure, you control when updates apply.
+
+A one-time setup installs a GitHub Actions workflow in your deployment repo. After that, updates are a single click.
+
+1. **One-time**: click **Initialize updater** in YAOS settings → **Advanced**. GitHub opens with a pre-filled workflow file. Commit it.
+2. **Update**: YAOS notifies you when a new version ships. Click **Open update action** → **Run workflow** with `update`.
+3. **Rollback**: same workflow, change action to `revert`.
+
+Some releases require manual migration steps. The updater will abort with a clear warning — read the release notes before retrying. Re-clicking Deploy to Cloudflare is not a safe update path for a stateful server; YAOS uses a Git-driven workflow so the same Worker identity, Durable Object bindings, and history are preserved.
+
+## Works with scripts and AI agents
+
+Because Obsidian vaults are just local Markdown files, YAOS plays unusually well with scripts, CLI tools, and AI agents that edit files directly on disk. The CRDT state stays aligned with the filesystem, so changes from any source — git, shell scripts, agents writing to disk — propagate cleanly across devices instead of falling back to conflicted-copy workflows.
+
+If you're building agentic workflows on top of Obsidian vaults, YAOS gives you the sync infrastructure so you don't have to wire up your own.
+
+## How it works
+
+YAOS keeps your vault as normal local files, while also maintaining a shared real-time state for sync.
+
+1. Each markdown file gets a stable ID and a `Y.Text` CRDT for its content.
+2. All per-file CRDTs live inside one shared vault-level `Y.Doc` — this keeps cross-file operations transactional. A folder rename is atomic across all files; the vault structure can't tear.
+3. Live editor edits flow through a Yjs + CodeMirror binding.
+4. Each vault maps to one Durable Object sync room. The shared state survives server restarts and hibernation.
+5. Offline edits are stored in IndexedDB and merge on reconnect.
+6. Attachments sync separately via content-addressed R2 storage instead of being forced through the text CRDT.
+7. Daily and on-demand snapshots exist as a safety net.
+
+In practice, that means your vault still exists locally as normal files, Obsidian keeps behaving like Obsidian, and YAOS keeps the disk mirror and the shared CRDT state aligned instead of asking devices to take polite turns uploading files later.
+
 ## Architecture
 
-<p align="center">
-  <img src="assets/architecture-diagram.png" alt="YAOS architecture diagram" width="700" />
-</p>
+![YAOS Architecture](assets/architecture-diagram.png)
 
-- One vault maps to one Durable Object-backed sync room.
-- Yjs sync runs through `y-partyserver`.
-- Durable Object storage persists the live CRDT snapshot.
-- Attachments are uploaded through the Worker and stored in R2.
-- Snapshots are gzipped CRDT archives stored in R2.
-- Auth uses the claimed setup token by default, with `SYNC_TOKEN` as an optional hard override.
+## Engineering
 
-## Local development
+This repository keeps deep architecture notes under [`engineering/`](./engineering). These aren't afterthoughts — they capture the design rationale, trade-offs, and failure modes behind a production CRDT sync engine on Cloudflare Workers.
 
-```bash
-cd server
-npm install
-npm run dev -- --var SYNC_TOKEN:dev-sync-token
-```
+- **[Monolithic vault CRDT](./engineering/monolith.md)** — Why one vault-level `Y.Doc`, what we gain (ACID cross-file transactions), and what we consciously trade off.
+- **[Filesystem bridge](./engineering/filesystem-bridge.md)** — How noisy Obsidian file events are converted into safe CRDT updates with dirty-set draining and content-acknowledged suppression.
+- **[Checkpoint + journal persistence](./engineering/checkpoint-journal.md)** — The storage-engine rewrite that removed full-state rewrites and introduced state-vector-anchored delta journaling.
+- **[Attachment sync](./engineering/attachment-sync.md)** — Native Worker proxy uploads, capability negotiation, and bounded fan-out under Cloudflare connection limits.
+- **[Zero-config auth](./engineering/zero-config-auth.md)** — Browser claim UX, `obsidian://yaos` deep-link pairing, and env-token override behavior.
+- **[Zero-ops update pipeline](./engineering/zero-ops-update-pipeline.md)** — Why detached deploy repos need bootstrap injection, reusable workflows, and migration safety gates.
+- **[Warts and limits](./engineering/warts-and-limits.md)** — Canonical limits, safety invariants, and the pragmatic compromises currently in production.
 
-The local Worker will be served by Wrangler. Use its printed local URL as the plugin's **Server host**.
+## Limits
 
-Passing `SYNC_TOKEN` locally is optional. If you omit it, the server starts unclaimed and you can claim it in a browser.
+YAOS is optimized for personal or small-team note vaults, not for arbitrarily huge text archives. The monolithic `Y.Doc` design gives excellent real-time ergonomics and simpler cross-file behavior, but it creates a practical ceiling for very large vaults.
 
-## Deploy to Cloudflare
+If your vault is normal notes, drafts, research, and attachments, YAOS is a great fit. If you want to sync giant text dumps or archival datasets, a simpler file-sync tool is a better choice.
 
-Use the **Deploy to Cloudflare** button above for the default setup. It targets the `server/` subdirectory so Cloudflare treats this folder as the project root.
-This repo intentionally keeps `.env.example` free of assignments so the deploy flow does not prompt for `SYNC_TOKEN` by default.
+Rule of thumb: around 50 MB of raw text (not counting attachments like images and PDFs) is a comfortable target.
 
-The local `wrangler.toml` in this directory defines:
+## Configuration
 
-- the Worker entrypoint (`server/src/index.ts`)
-- the `VaultSyncServer` Durable Object binding
-- the `ServerConfig` Durable Object binding
+After enabling, go to **Settings → YAOS**.
 
-The default deploy is text-only:
+| Setting | Description |
+|---------|-------------|
+| **Server URL** | Your Worker URL (e.g. `https://sync.yourdomain.com`) |
+| **Sync token** | Filled automatically by the setup link after claiming |
+| **Device name** | Shown to other devices in live cursors and presence |
+| **Exclude paths** | Comma-separated prefixes to skip (e.g. `templates/, .trash/`) |
+| **Max text file size** | Skip text files larger than this for live document sync |
+| **Sync attachments** | Enable R2 sync for images, PDFs, and other non-markdown files |
+| **Max attachment size** | Skip attachments larger than this (default 10 MB) |
+| **Parallel transfers** | Number of simultaneous attachment upload/download slots |
+| **Show remote cursors** | Display cursor positions and selections from other devices |
+| **Edits from other apps** | Control how YAOS handles changes from git, scripts, or other editors |
+| **Debug logging** | Verbose console output for troubleshooting |
 
-- no `SYNC_TOKEN` secret is required up front
-- no R2 binding is required up front
-- the first browser visit shows the claim page
+`Manual connection` and `Advanced` sections are available in the settings UI when you need to inspect or override connection details.
 
-That claim page generates a token in the browser and returns an `obsidian://yaos?...` setup link you can use to configure the plugin.
+## Commands
 
-### How updates work after deploy
+Access via command palette (Ctrl/Cmd+P):
 
-The Deploy to Cloudflare button creates a new repository in your own Git account and connects this Worker to that new repo.
+| Command | Description |
+|---------|-------------|
+| **Reconnect to sync server** | Force reconnect after network changes |
+| **Force reconcile** | Re-merge disk state with CRDT |
+| **Show sync debug info** | Connection state, file counts, queue status |
+| **Take snapshot now** | Create an immediate backup to R2 |
+| **Browse and restore snapshots** | View snapshots, diff against current state, selective restore |
+| **Reset local cache** | Clear IndexedDB, re-sync from server |
+| **Nuclear reset** | Wipe all CRDT state everywhere, re-seed from disk |
 
-That means future pushes to your generated repo will redeploy automatically, but future pushes to the original `kavinsood/yaos` template repo will not update your existing Worker on their own.
+## Troubleshooting
 
-To pick up new YAOS changes later:
+**"Unauthorized" errors**: Token mismatch between plugin and server. Check both match exactly.
 
-1. Add your generated repo URL in the plugin settings (`Deployment repo URL`).
-2. Use **Initialize updater** once (GitHub) if workflows are missing.
-3. Use **Open update action** from plugin settings and run the update workflow.
-4. Cloudflare redeploys automatically after the workflow push.
+**"R2 not configured"**: The server doesn't have a `YAOS_BUCKET` binding yet. See the [R2 setup video](https://youtu.be/Z7xCMEYfdFM).
 
-### Manual CLI deploy
+**Cloudflare deploy/dashboard issues**: If build queue or dashboard behavior is flaky, see [server troubleshooting notes](./server/README.md#transient-cloudflare-deployment-issues), including the `wrangler.toml` R2-binding fallback.
 
-```bash
-cd server
-npm install
-npm run deploy
-```
+**Sync stops on mobile**: Use "Reconnect to sync server" command. Check you have network connectivity.
 
-### Optional post-deploy R2 setup
+**Files not syncing**: Check exclude patterns. Files over max size are skipped. Use debug logging to see what's happening, and then raise an issue on GitHub.
 
-If you want attachments and snapshots later:
+**Conflicts after offline edits**: CRDTs merge automatically but the result depends on operation order. Review merged content if needed.
 
-1. Create an R2 bucket in the Cloudflare dashboard.
-2. Open your Worker in **Workers & Pages**.
-3. Add an R2 binding named `YAOS_BUCKET`.
+## License
 
-The same Worker will then begin reporting attachments and snapshots as available.
+[0-BSD](LICENSE)
 
-If the Cloudflare dashboard UI is transiently failing when attaching the bucket, use this fallback in your generated deploy repo:
-
-1. Edit `wrangler.toml`.
-2. Add this block (replace bucket name):
-
-```toml
-[[r2_buckets]]
-binding = "YAOS_BUCKET"
-bucket_name = "your-bucket-name"
-```
-
-3. Commit and push. Cloudflare redeploys from that commit.
-
-After deploy, refresh your Worker URL. YAOS should report attachments/snapshots as available.
-
-## Transient Cloudflare deployment issues
-
-Cloudflare can occasionally show temporary dashboard/build instability. Common examples:
-
-- build queue delays, then the deploy eventually succeeds
-- temporary dashboard failure when adding an R2 binding
-
-Recommended workflow:
-
-1. Retry once after a short wait.
-2. If it still fails, use repo-backed fallback paths (like `wrangler.toml` binding edits) and push a new commit.
-3. Capture the failed deployment commit SHA from Cloudflare (**Workers & Pages** → deployment → **Commit**) when opening an issue.
-
-The commit SHA lets us verify the exact server snapshot Cloudflare built, which is critical for debugging intermittent failures.
-
-## Endpoints
-
-### WebSocket sync
-
-- `wss://<host>/vault/sync/<vaultId>?token=<setup-token>`
-
-### Blob APIs
-
-- `POST /vault/<vaultId>/blobs/exists`
-- `PUT /vault/<vaultId>/blobs/<sha256>`
-- `GET /vault/<vaultId>/blobs/<sha256>`
-
-### Snapshot APIs
-
-- `POST /vault/<vaultId>/snapshots/maybe`
-- `POST /vault/<vaultId>/snapshots`
-- `GET /vault/<vaultId>/snapshots`
-- `GET /vault/<vaultId>/snapshots/<snapshotId>`
-
-### Debug
-
-- `GET /vault/<vaultId>/debug/recent`
-
-All HTTP endpoints require `Authorization: Bearer <setup-token>` once the server has been claimed.
-
-If you set `SYNC_TOKEN`, that environment value becomes the required token instead.
-
-## Operational safeguards
-
-- Blob uploads are capped at 10 MB by default.
-- Blob existence checks use bounded concurrency.
-- Snapshot creation is daily-idempotent through the `/snapshots/maybe` route.
-- Snapshot archives are stored compressed to keep R2 usage modest.
-
-## Deploy button note
-
-The canonical infrastructure config lives in this `server/` directory, and the Deploy to Cloudflare button should target the `server/` subdirectory path in GitHub.
+**Acknowledgements:** The initial landing page design was heavily inspired by and utilizes assets from the excellent folks at [superwhisper](https://superwhisper.com). Huge thanks to their creator for permitting temporary use while we fully redesign. (P.S. They are hiring!).
