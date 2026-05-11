@@ -10,13 +10,13 @@
 	},
 	"dependencies": {
 		"fflate": "^0.8.2",
-		"partyserver": "0.3.2",
-		"y-partyserver": "2.1.2",
-		"yjs": "^13.6.20"
+		"partyserver": "0.5.5",
+		"y-partyserver": "2.2.0",
+		"yjs": "^13.6.30"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "4.20260305.0",
-		"wrangler": "4.69.0",
+		"@cloudflare/workers-types": "4.20260511.1",
+		"wrangler": "4.90.0",
 		"typescript": "^5.8.3"
 	}
 }
